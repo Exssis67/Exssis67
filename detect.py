@@ -11,32 +11,52 @@ Example:
 
 Note that only one video can be processed at one run.
 """
-import time
 
-import tensorflow as tf
 import sys
 import cv2
+import tensorflow as tf
+import outputWindow
+import threading
+import requests
 
+from utils import load_class_names, draw_frame, draw_frame_2
 from yolo_v3 import Yolo_v3
-from utils import load_images, load_class_names, draw_boxes, draw_frame, draw_frame_2
 
 tf.compat.v1.disable_eager_execution()
 
 _MODEL_SIZE = (416, 416)
 _CLASS_NAMES_FILE = './data/labels/coco.names'
 _MAX_OUTPUT_SIZE = 20
+_LAST_DETECTION = ''
+_NEW_DETECTION = ''
+_DETECTION_COUNTER = 0;
+_ADD_THRESHOLD = 3
 
 
 def main(iou_threshold, confidence_threshold):
+    global _LAST_DETECTION, _NEW_DETECTION, _DETECTION_COUNTER, _ADD_THRESHOLD
     saver, detections, inputs, class_names = setup(iou_threshold, confidence_threshold)
     cap, frame_size, win_name = setupWindow()
+    requests.get(url="http://192.168.4.1/?Command=setspeed+800")
+    requests.get(url="http://192.168.4.1/?Command=backwards")
     try:
         with tf.compat.v1.Session() as sess:
             saver.restore(sess, './weights/model.ckpt')
             while True:
                 result = detect(sess, detections, inputs, class_names, cap, frame_size, win_name)
                 for obj in result:
-                    print(obj)
+                    if not obj == _LAST_DETECTION:
+                        if obj == _NEW_DETECTION:
+                            _DETECTION_COUNTER += 1
+                            print(_NEW_DETECTION + " " + str(_DETECTION_COUNTER) + " mal erkannt")
+                            if _DETECTION_COUNTER >= _ADD_THRESHOLD:
+                                _DETECTION_COUNTER = 0
+                                _LAST_DETECTION = obj
+                                outputWindow.addLabel(obj)
+                                print(obj)
+                        else:
+                            _NEW_DETECTION = obj
+                            _DETECTION_COUNTER = 0
     finally:
         cv2.destroyAllWindows()
         cap.release()
@@ -94,4 +114,6 @@ def detect(sess, detections, inputs, class_names, cap, frame_size, win_name):
 
 
 if __name__ == '__main__':
-    main(float(sys.argv[1]), float(sys.argv[2]))
+    tensorflowThread = threading.Thread(target=main, args=(float(sys.argv[1]), float(sys.argv[2])))
+    tensorflowThread.start()
+    outputWindow.init()
