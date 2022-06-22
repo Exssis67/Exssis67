@@ -1,6 +1,6 @@
 appJar
 tensorflow==2.0
-numpy==1.16
+numpy==1.22.0
 Pillow
 opencv-python
 seaborn
